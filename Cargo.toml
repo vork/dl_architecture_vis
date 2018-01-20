@@ -1,0 +1,8 @@
+[package]
+name = "dl_architecture_vis"
+version = "0.1.0"
+authors = ["Mark Boss <markboss@mailbox.org>"]
+
+[dependencies]
+svg_shape_utils = { version = "0.0.1", path = "svg_shape_utils/" }
+file_parser = { version = "0.0.1", path = "file_parser/" }

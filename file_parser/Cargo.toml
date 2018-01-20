@@ -1,0 +1,16 @@
+[package]
+
+name = "file_parser"
+version = "0.0.1"
+description = "Parses the DLVis toml files."
+authors = ["Mark Benedikt Boss <markboss@mailbox.org>"]
+license = "MIT/Apache-2.0"
+
+[lib]
+name = "file_parser"
+path = "src/lib.rs"
+
+[dependencies]
+toml = "0.4"
+serde_derive = "1.0"
+serde = "1.0"

@@ -1,0 +1,15 @@
+[package]
+
+name = "dl_vis_layout"
+version = "0.0.1"
+description = "Helper for several often used svg shapes."
+authors = ["Mark Benedikt Boss <markboss@mailbox.org>"]
+license = "MIT/Apache-2.0"
+
+[lib]
+name = "dl_vis_layout"
+path = "src/lib.rs"
+
+[dependencies]
+cassowary = "0.3.0"
+file_parser = { version = "0.0.1", path = "../file_parser/" }
