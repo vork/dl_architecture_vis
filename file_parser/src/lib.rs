@@ -8,6 +8,7 @@ use std::collections::HashMap;
 #[derive(Debug, Deserialize)]
 pub struct DLVisToml {
     start: usize,
+    end: usize,
     nodes: Vec<NodeToml>
 }
 
@@ -42,10 +43,15 @@ pub struct Node {
     pub operation: Option<Operation>,
     pub pass_to: Link,
 
+    pub neighbors: Vec<Neighbors>,
     pub below_of: Link,
     pub above_of: Link,
     pub right_of: Link,
     pub left_of: Link,
+}
+
+pub enum Neighbors {
+    Left, Right, Above, Below
 }
 
 impl Node {
@@ -53,11 +59,33 @@ impl Node {
         let operation = Operation::from_toml(toml_node.operation);
 
         match operation  {
-            Ok(op) =>
-                Ok(Node { id: toml_node.id, dimension: toml_node.dimension,
+            Ok(op) => {
+                let mut neighbors = Vec::new();
+                if toml_node.below_of.is_some() {
+                    neighbors.add(Neighbors::Below)
+                }
+                if toml_node.above_of.is_some() {
+                    neighbors.add(Neighbors::Above)
+                }
+                if toml_node.right_of.is_some() {
+                    neighbors.add(Neighbors::Right)
+                }
+                if toml_node.left_of.is_some() {
+                    neighbors.add(Neighbors::Left)
+                }
+                Ok(Node {
+                    id: toml_node.id,
+                    dimension: toml_node.dimension,
                     skip_connection_to: toml_node.skip_connection_to,
-                    operation: op, pass_to: toml_node.pass_to, below_of: toml_node.below_of,
-                    above_of: toml_node.above_of, right_of: toml_node.right_of, left_of: toml_node.left_of }),
+                    operation: op,
+                    neighbors,
+                    pass_to: toml_node.pass_to,
+                    below_of: toml_node.below_of,
+                    above_of: toml_node.above_of,
+                    right_of: toml_node.right_of,
+                    left_of: toml_node.left_of
+                })
+            },
             Err(err) => Err(err)
         }
     }
@@ -180,6 +208,7 @@ pub struct FullyConnected {
 pub struct DLVis {
     nodes: HashMap<usize, Node>,
     start: usize,
+    end: usize
 }
 
 impl DLVis {
@@ -204,14 +233,14 @@ impl DLVis {
             }
         }
 
-        Ok(DLVis { nodes: node_map, start: input.start })
+        Ok(DLVis { nodes: node_map, start: input.start, end: input.end })
     }
 
     pub fn get_start(&self) -> &Node {
         self.nodes.get(&self.start).unwrap()
     }
 
-    pub fn get_above_of(&self, node: Node) -> Option<&Node> {
+    pub fn get_above_of(&self, node: &Node) -> Option<&Node> {
         if let Some(link) = node.above_of {
             return self.nodes.get(&link)
         } else {
@@ -219,7 +248,7 @@ impl DLVis {
         }
     }
 
-    pub fn get_below_of(&self, node: Node) -> Option<&Node> {
+    pub fn get_below_of(&self, node: &Node) -> Option<&Node> {
         if let Some(link) = node.below_of {
             return self.nodes.get(&link)
         } else {
@@ -227,7 +256,7 @@ impl DLVis {
         }
     }
 
-    pub fn get_left_of(&self, node: Node) -> Option<&Node> {
+    pub fn get_left_of(&self, node: &Node) -> Option<&Node> {
         if let Some(link) = node.left_of {
             return self.nodes.get(&link)
         } else {
@@ -235,7 +264,7 @@ impl DLVis {
         }
     }
 
-    pub fn get_right_of(&self, node: Node) -> Option<&Node> {
+    pub fn get_right_of(&self, node: &Node) -> Option<&Node> {
         if let Some(link) = node.right_of {
             return self.nodes.get(&link)
         } else {
@@ -243,15 +272,15 @@ impl DLVis {
         }
     }
 
-    pub fn get_operation_to(&self, node: Node) -> Option<(Option<&Node>, Op)> {
-        if let Some(op) = node.operation {
-            return Some((self.nodes.get(&op.to), op.operation))
+    pub fn get_operation_to<'a>(&'a self, node: &'a Node) -> Option<(Option<&'a Node>, &'a Op)> {
+        if let Some(ref op) = node.operation {
+            return Some((self.nodes.get(&op.to), &op.operation))
         } else {
             return None;
         }
     }
 
-    pub fn get_pass_to(&self, node: Node) -> Option<&Node> {
+    pub fn get_pass_to(&self, node: &Node) -> Option<&Node> {
         if let Some(link) = node.pass_to {
             return self.nodes.get(&link)
         } else {
@@ -259,16 +288,28 @@ impl DLVis {
         }
     }
 
-    pub fn get_skip_connection_to(&self, node: Node) -> Option<&Node> {
+    pub fn get_skip_connection_to(&self, node: &Node) -> Option<&Node> {
         if let Some(link) = node.skip_connection_to {
             return self.nodes.get(&link)
         } else {
             return None;
         }
     }
+
+    pub fn get_neighbor(&self, node: &Node, neighbor: Neighbors) -> Option<&Node> {
+        if neighbor == Neighbors::Left {
+            return self.get_left_of(node);
+        } else if neighbor == Neighbors::Right {
+            return self.get_right_of(node);
+        } else if neighbor == Neighbors::Above {
+            return self.get_above_of(node);
+        } else {
+            return self.get_below_of(node);
+        }
+    }
 }
 
-fn parse_file(input: String) -> Result<DLVis, String> { //TODO return error enums
+pub fn parse_file(input: String) -> Result<DLVis, String> { //TODO return error enums
     match toml::from_str(&input) {
         Ok(res) => return DLVis::from_toml_input(res),
         Err(e) => return Err(format!("Error decoding the input: {:?}", e))

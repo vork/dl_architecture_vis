@@ -4,5 +4,6 @@ version = "0.1.0"
 authors = ["Mark Boss <markboss@mailbox.org>"]
 
 [dependencies]
+dl_vis_layout = { version = "0.0.1", path = "dl_vis_layout/" }
 svg_shape_utils = { version = "0.0.1", path = "svg_shape_utils/" }
 file_parser = { version = "0.0.1", path = "file_parser/" }
