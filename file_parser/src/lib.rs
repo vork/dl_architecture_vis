@@ -39,9 +39,7 @@ pub struct OperationToml {
 pub struct Node {
     pub id: usize,
     pub dimension: Vec<u32>,
-    pub skip_connection_to: Link,
-    pub operation: Option<Operation>,
-    pub pass_to: Link,
+    pub operations: Option<Vec<Operation>>,
 
     pub neighbors: Vec<Neighbors>,
     pub below_of: Link,
@@ -56,50 +54,41 @@ pub enum Neighbors {
 
 impl Node {
     pub fn from_toml(toml_node: NodeToml) -> Result<Node, String> {
-        let operation = Operation::from_toml(toml_node.operation);
+        let operation = Operation::from_toml(toml_node);
 
-        match operation  {
-            Ok(op) => {
-                let mut neighbors = Vec::new();
-                if toml_node.below_of.is_some() {
-                    neighbors.add(Neighbors::Below)
-                }
-                if toml_node.above_of.is_some() {
-                    neighbors.add(Neighbors::Above)
-                }
-                if toml_node.right_of.is_some() {
-                    neighbors.add(Neighbors::Right)
-                }
-                if toml_node.left_of.is_some() {
-                    neighbors.add(Neighbors::Left)
-                }
-                Ok(Node {
-                    id: toml_node.id,
-                    dimension: toml_node.dimension,
-                    skip_connection_to: toml_node.skip_connection_to,
-                    operation: op,
-                    neighbors,
-                    pass_to: toml_node.pass_to,
-                    below_of: toml_node.below_of,
-                    above_of: toml_node.above_of,
-                    right_of: toml_node.right_of,
-                    left_of: toml_node.left_of
-                })
-            },
-            Err(err) => Err(err)
+
+        let mut neighbors = Vec::new();
+        if toml_node.below_of.is_some() {
+            neighbors.push(Neighbors::Below)
         }
+        if toml_node.above_of.is_some() {
+            neighbors.push(Neighbors::Above)
+        }
+        if toml_node.right_of.is_some() {
+            neighbors.push(Neighbors::Right)
+        }
+        if toml_node.left_of.is_some() {
+            neighbors.push(Neighbors::Left)
+        }
+        Ok(Node {
+            id: toml_node.id,
+            dimension: toml_node.dimension,
+            operations: operation,
+            neighbors,
+            below_of: toml_node.below_of,
+            above_of: toml_node.above_of,
+            right_of: toml_node.right_of,
+            left_of: toml_node.left_of
+        })
+
     }
 
     fn return_all_links(&self) -> Vec<usize> {
         let mut ret = Vec::new();
-        if let Some(skip) = self.skip_connection_to {
-            ret.push(skip);
-        }
-        if let Some(ref operation) = self.operation {
-            ret.push(operation.to);
-        }
-        if let Some(pass_to) = self.pass_to {
-            ret.push(pass_to);
+        if let Some(ref operations) = self.operations {
+            for op in operations {
+                ret.push(op.to);
+            }
         }
 
         if let Some(below_of) = self.below_of {
@@ -139,7 +128,9 @@ pub enum Op {
     FullyConnected {
         num_outputs: u32,
         activation_fn: Option<String>,
-        normalization_fn: Option<String>}
+        normalization_fn: Option<String>},
+    PassTo,
+    SkipTo,
 }
 
 pub struct Operation {
@@ -148,30 +139,40 @@ pub struct Operation {
 }
 
 impl Operation {
-    pub fn from_toml(optoml: Option<OperationToml>) -> Result<Option<Operation>, String> {
+    pub fn from_toml(node_toml: NodeToml) -> Option<Vec<Operation>> {
+        let optoml = node_toml.operation;
+        let mut operations = Vec::new();
         if let Some(input) = optoml {
             if input.convolution.is_some() && input.deconvolution.is_none() && input.fully_connected.is_none() {
                 let conv = input.convolution.unwrap();
                 let op: Op = Op::Convolution { dimension: conv.dimension, kernel_size: conv.kernel_size,
                     num_outputs: conv.num_outputs, stride: conv.stride, max_pool: conv.max_pool,
                     activation_fn: conv.activation_fn, normalization_fn: conv.normalization_fn };
-                return Ok( Some(Operation { to: input.to, operation: op }) )
+                operations.push(Operation { to: input.to, operation: op });
             } else if input.convolution.is_none() && input.deconvolution.is_some() && input.fully_connected.is_none() {
                 let deconv = input.deconvolution.unwrap();
                 let op: Op = Op::Deconvolution { dimension: deconv.dimension, kernel_size: deconv.kernel_size,
                     num_outputs: deconv.num_outputs, stride: deconv.stride, max_pool: deconv.max_pool,
                     activation_fn: deconv.activation_fn, normalization_fn: deconv.normalization_fn };
-                return Ok( Some(Operation { to: input.to, operation: op }) )
+                operations.push(Operation { to: input.to, operation: op });
             } else if input.convolution.is_none() && input.deconvolution.is_none() && input.fully_connected.is_some() {
                 let fc = input.fully_connected.unwrap();
                 let op: Op = Op::FullyConnected { num_outputs: fc.num_outputs,
                     activation_fn: fc.activation_fn, normalization_fn: fc.normalization_fn };
-                return Ok( Some(Operation { to: input.to, operation: op }) )
-            } else {
-                return Err("Only one operation is allowed!".to_string())
+                operations.push(Operation { to: input.to, operation: op });
             }
+        }
+        if node_toml.pass_to.is_some() {
+            operations.push(Operation { to: node_toml.pass_to.unwrap(), operation: Op::PassTo});
+        }
+        if node_toml.skip_connection_to.is_some() {
+            operations.push(Operation { to: node_toml.skip_connection_to.unwrap(), operation: Op::SkipTo });
+        }
+
+        if operations.is_empty() {
+            return None;
         } else {
-            return Ok( None )
+            Some(operations)
         }
     }
 }
@@ -273,7 +274,7 @@ impl DLVis {
     }
 
     pub fn get_operation_to<'a>(&'a self, node: &'a Node) -> Option<(Option<&'a Node>, &'a Op)> {
-        if let Some(ref op) = node.operation {
+        if let Some(ref op) = node.operations {
             return Some((self.nodes.get(&op.to), &op.operation))
         } else {
             return None;
