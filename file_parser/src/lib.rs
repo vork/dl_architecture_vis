@@ -48,15 +48,13 @@ pub struct Node {
     pub left_of: Link,
 }
 
+#[derive(PartialEq, Debug, Copy, Clone)]
 pub enum Neighbors {
     Left, Right, Above, Below
 }
 
 impl Node {
     pub fn from_toml(toml_node: NodeToml) -> Result<Node, String> {
-        let operation = Operation::from_toml(toml_node);
-
-
         let mut neighbors = Vec::new();
         if toml_node.below_of.is_some() {
             neighbors.push(Neighbors::Below)
@@ -70,6 +68,8 @@ impl Node {
         if toml_node.left_of.is_some() {
             neighbors.push(Neighbors::Left)
         }
+
+        let operation = Operation::from_toml(&toml_node);
         Ok(Node {
             id: toml_node.id,
             dimension: toml_node.dimension,
@@ -134,29 +134,29 @@ pub enum Op {
 }
 
 pub struct Operation {
-    to: usize,
-    operation: Op
+    pub to: usize,
+    pub operation: Op
 }
 
 impl Operation {
-    pub fn from_toml(node_toml: NodeToml) -> Option<Vec<Operation>> {
-        let optoml = node_toml.operation;
+    pub fn from_toml(node_toml: &NodeToml) -> Option<Vec<Operation>> {
+        let optoml = &node_toml.operation;
         let mut operations = Vec::new();
-        if let Some(input) = optoml {
+        if let &Some(ref input) = optoml {
             if input.convolution.is_some() && input.deconvolution.is_none() && input.fully_connected.is_none() {
-                let conv = input.convolution.unwrap();
+                let conv = input.convolution.clone().unwrap(); //TODO clone is not really the way to go
                 let op: Op = Op::Convolution { dimension: conv.dimension, kernel_size: conv.kernel_size,
                     num_outputs: conv.num_outputs, stride: conv.stride, max_pool: conv.max_pool,
                     activation_fn: conv.activation_fn, normalization_fn: conv.normalization_fn };
                 operations.push(Operation { to: input.to, operation: op });
             } else if input.convolution.is_none() && input.deconvolution.is_some() && input.fully_connected.is_none() {
-                let deconv = input.deconvolution.unwrap();
+                let deconv = input.deconvolution.clone().unwrap();
                 let op: Op = Op::Deconvolution { dimension: deconv.dimension, kernel_size: deconv.kernel_size,
                     num_outputs: deconv.num_outputs, stride: deconv.stride, max_pool: deconv.max_pool,
                     activation_fn: deconv.activation_fn, normalization_fn: deconv.normalization_fn };
                 operations.push(Operation { to: input.to, operation: op });
             } else if input.convolution.is_none() && input.deconvolution.is_none() && input.fully_connected.is_some() {
-                let fc = input.fully_connected.unwrap();
+                let fc = input.fully_connected.clone().unwrap();
                 let op: Op = Op::FullyConnected { num_outputs: fc.num_outputs,
                     activation_fn: fc.activation_fn, normalization_fn: fc.normalization_fn };
                 operations.push(Operation { to: input.to, operation: op });
@@ -177,7 +177,7 @@ impl Operation {
     }
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Clone)]
 pub struct Convolution {
     dimension: u32,
     kernel_size: u32,
@@ -188,7 +188,7 @@ pub struct Convolution {
     normalization_fn: Option<String>
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Clone)]
 pub struct Deconvolution {
     dimension: u32,
     kernel_size: u32,
@@ -199,7 +199,7 @@ pub struct Deconvolution {
     normalization_fn: Option<String>
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Clone)]
 pub struct FullyConnected {
     num_outputs: u32,
     activation_fn: Option<String>,
@@ -235,6 +235,10 @@ impl DLVis {
         }
 
         Ok(DLVis { nodes: node_map, start: input.start, end: input.end })
+    }
+
+    pub fn get_node(&self, id: usize) -> Option<&Node> {
+        return self.nodes.get(&id)
     }
 
     pub fn get_start(&self) -> &Node {
@@ -273,25 +277,13 @@ impl DLVis {
         }
     }
 
-    pub fn get_operation_to<'a>(&'a self, node: &'a Node) -> Option<(Option<&'a Node>, &'a Op)> {
-        if let Some(ref op) = node.operations {
-            return Some((self.nodes.get(&op.to), &op.operation))
-        } else {
-            return None;
-        }
-    }
-
-    pub fn get_pass_to(&self, node: &Node) -> Option<&Node> {
-        if let Some(link) = node.pass_to {
-            return self.nodes.get(&link)
-        } else {
-            return None;
-        }
-    }
-
-    pub fn get_skip_connection_to(&self, node: &Node) -> Option<&Node> {
-        if let Some(link) = node.skip_connection_to {
-            return self.nodes.get(&link)
+    pub fn get_operation_to<'a>(&'a self, node: &'a Node) -> Option<Vec<(Option<&'a Node>, &'a Op)>> {
+        if let Some(ref ops) = node.operations {
+            let mut ret = Vec::new();
+            for op in ops {
+                ret.push((self.nodes.get(&op.to), &op.operation));
+            }
+            return Some(ret)
         } else {
             return None;
         }
