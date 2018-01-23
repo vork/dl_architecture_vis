@@ -23,7 +23,11 @@ impl Node {
 
 const NODE_SIZE: i32 = 100;
 
-fn iterate_graph(graph: DLVis) {
+fn iterate_graph<'a>(graph: &'a DLVis) ->
+                               (HashMap<usize, &'a parser::Node>,
+                                HashMap<usize, Node>,
+                                HashMap<usize, Vec<(usize, parser::Neighbors)>>,
+                                HashMap<usize, Vec<(usize, parser::Op)>>) {
     // Open nodes
     let mut open_set = VecDeque::new();
     //Already visited nodes
@@ -109,11 +113,14 @@ fn iterate_graph(graph: DLVis) {
             closed_set.insert(pid);
         }
     }
+    return (nodes, layout, position_meta, operation_meta)
 }
 
 pub fn render_file(toml: String) {
     match parser::parse_file(toml) {
-        Ok(dlvis) => iterate_graph(dlvis),
+        Ok(dlvis) => {
+            let (nodes, layout, position_meta, operation_meta) = iterate_graph(&dlvis);
+        },
         Err(err) => panic!(err),
     }
 }
