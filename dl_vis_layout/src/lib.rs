@@ -47,10 +47,16 @@ fn iterate_graph(graph: DLVis) {
     while !open_set.is_empty() {
         let parent_id = open_set.pop_front();
         if parent_id.is_some() {
-            let parent = nodes.get(&parent_id.unwrap()).expect(&format!("Parent {} couldn't be found in Hashmap", parent_id.unwrap()));
+            let pid = parent_id.unwrap();
 
-            for neighbor in parent.neighbors {
-                let child = graph.get_neighbor(parent, neighbor).expect(&format!("Neighbor {:?} not found for id {}", neighbor, parent.id));
+            let neighbors = nodes.get(&pid)
+                .expect(&format!("Parent {} couldn't be found in Hashmap", pid))
+                .neighbors.clone();
+            for neighbor in neighbors {
+                let child = graph.get_neighbor(nodes.get(&pid)
+                                                   .expect(&format!("Parent {} couldn't be found in Hashmap",
+                                                                    pid)), neighbor)
+                    .expect(&format!("Neighbor {:?} not found for id {}", neighbor, pid));
 
                 //Already visited. No need to create a cycle
                 if closed_set.contains(&child.id) {
@@ -71,12 +77,17 @@ fn iterate_graph(graph: DLVis) {
                 }
 
                 //Set the positional relationship to the child
-                let positions = position_meta.entry(parent_id.unwrap()).or_insert(Vec::new());
+                let positions = position_meta.entry(pid).or_insert(Vec::new());
                 (*positions).push((child.id, neighbor));
             }
 
-            if parent.operations.is_some() {
-                for ref operation in parent.operations.unwrap() {
+            let is_operation_some = nodes.get(&pid)
+                .expect(&format!("Parent {} couldn't be found in Hashmap", pid))
+                .operations.is_some();
+
+            if is_operation_some {
+                let operations = nodes.get(&pid).unwrap().operations.clone().unwrap();
+                for operation in operations {
                     let id = operation.to;
                     let node = graph.get_node(id);
 
@@ -88,13 +99,14 @@ fn iterate_graph(graph: DLVis) {
                             nodes.insert(id, node.unwrap());
                         }
 
-                        let op = operation_meta.entry(parent.id).or_insert(Vec::new());
+                        let op = operation_meta
+                            .entry(pid).or_insert(Vec::new());
                         (*op).push((operation.to, operation.operation));
                     }
                 }
             }
 
-            closed_set.insert(parent_id.unwrap());
+            closed_set.insert(pid);
         }
     }
 }

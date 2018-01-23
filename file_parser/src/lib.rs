@@ -108,6 +108,7 @@ impl Node {
     }
 }
 
+#[derive(Debug, Clone)]
 pub enum Op {
     Convolution{
         dimension: u32,
@@ -132,7 +133,7 @@ pub enum Op {
     PassTo,
     SkipTo,
 }
-
+#[derive(Debug, Clone)]
 pub struct Operation {
     pub to: usize,
     pub operation: Op
