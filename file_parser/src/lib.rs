@@ -7,7 +7,11 @@ use std::collections::HashMap;
 
 #[derive(Debug, Deserialize)]
 pub struct DLVisToml {
-    start: usize,
+    start: usize, //TODO add align for start
+    start_align_left: Option<bool>,
+    start_align_right: Option<bool>,
+    start_align_up: Option<bool>,
+    start_align_down: Option<bool>,
     end: usize,
     nodes: Vec<NodeToml>
 }
@@ -209,8 +213,12 @@ pub struct FullyConnected {
 
 pub struct DLVis {
     nodes: HashMap<usize, Node>,
-    start: usize,
-    end: usize
+    pub start: usize,
+    pub start_align_left: bool,
+    pub start_align_right: bool,
+    pub start_align_up: bool,
+    pub start_align_down: bool,
+    pub end: usize
 }
 
 impl DLVis {
@@ -235,7 +243,11 @@ impl DLVis {
             }
         }
 
-        Ok(DLVis { nodes: node_map, start: input.start, end: input.end })
+        Ok(DLVis { nodes: node_map, start: input.start, end: input.end,
+            start_align_left: input.start_align_left.is_some() && input.start_align_left.unwrap(),
+            start_align_right: input.start_align_right.is_some() && input.start_align_right.unwrap(),
+            start_align_up: input.start_align_up.is_some() && input.start_align_up.unwrap(),
+            start_align_down: input.start_align_down.is_some() && input.start_align_down.unwrap()})
     }
 
     pub fn get_node(&self, id: usize) -> Option<&Node> {
@@ -314,6 +326,8 @@ pub fn parse_file(input: String) -> Result<DLVis, String> { //TODO return error 
 fn parse_test() {
     let toml_str = r#"
 start = 1
+start_align_left = true
+start_align_up = true
 end = 3
 
 [[nodes]]
