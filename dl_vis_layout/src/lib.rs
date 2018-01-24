@@ -131,10 +131,10 @@ fn solve_layout(start: usize, end: usize,
                 start_align_right: bool,
                 start_align_up: bool,
                 start_align_down: bool,
-                nodes: HashMap<usize, &parser::Node>,
-                layout: HashMap<usize, Node>,
-                position_meta: HashMap<usize, Vec<(usize, parser::Neighbors)>>,
-                operation_meta: HashMap<usize, Vec<(usize, parser::Op)>>) -> HashMap<usize, Node> {
+                nodes: &HashMap<usize, &parser::Node>,
+                layout: &HashMap<usize, Node>,
+                position_meta: &HashMap<usize, Vec<(usize, parser::Neighbors)>>,
+                operation_meta: &HashMap<usize, Vec<(usize, parser::Op)>>) -> HashMap<usize, Node> {
     let mut names = HashMap::new();
 
     let window_width = Variable::new();
@@ -166,7 +166,7 @@ fn solve_layout(start: usize, end: usize,
         layout.get(&end).expect("Start node wasn't found!").upper |EQ(REQUIRED)| 0.0 //Up align
     ]).unwrap();*/
 
-    for (id, ps) in &position_meta {
+    for (id, ps) in position_meta {
         for p in ps {
             let to = p.0;
             let alignment = p.1;
@@ -203,12 +203,23 @@ fn solve_layout(start: usize, end: usize,
         }
     }
 
-    for (id, node) in &layout {
+    for (id, node) in layout {
+        let node_data = nodes.get(id).unwrap();
+
+        let dims = &node_data.dimension;
+
+        let mut final_size = NODE_SIZE;
+        if dims.len() > 3 {
+            let depth = dims[0];
+            let overlap = 0.1;
+            final_size += NODE_SIZE * depth as f32 * overlap ;
+        }
+
         solver.add_constraints(&[
             node.left |LE(REQUIRED)| node.right,
             node.upper |LE(REQUIRED)| node.lower,
-            node.right - node.left |EQ(WEAK)| NODE_SIZE,
-            node.lower - node.upper |EQ(WEAK)| NODE_SIZE,
+            node.right - node.left |EQ(WEAK)| final_size,
+            node.lower - node.upper |EQ(WEAK)| final_size,
         ]).unwrap();
         let name_left = format!("Node{}.Left", id);
         let name_right = format!("Node{}.Right", id);
@@ -245,7 +256,7 @@ pub fn render_file(toml: String) {
                          dlvis.start_align_right,
                          dlvis.start_align_up,
                          dlvis.start_align_down,
-                         nodes, layout, position_meta, operation_meta);
+                         &nodes, &layout, &position_meta, &operation_meta);
 
         },
         Err(err) => panic!(err),
@@ -301,6 +312,6 @@ end = 3
     assert_eq!(solve_layout(dlvis.start, dlvis.end, dlvis.start_align_left,
                             dlvis.start_align_right,
                             dlvis.start_align_up,
-                            dlvis.start_align_down, nodes, layout, position_meta, operation_meta).len(), 0);
+                            dlvis.start_align_down, &nodes, &layout, &position_meta, &operation_meta).len(), 0);
 }
 
