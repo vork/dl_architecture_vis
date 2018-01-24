@@ -14,11 +14,13 @@ end = 3
 	dimension = [5, 512, 512, 1]
 	pass_to = 2
 	left_of = 2
+	above_of = 2
 
 [[nodes]]
 	id = 2
 	dimension = [5, 512, 512, 1]
-	above_of = 3
+	below_of = 3
+	right_of = 3
 	[nodes.operation]
 		to = 3
 		[nodes.operation.convolution]

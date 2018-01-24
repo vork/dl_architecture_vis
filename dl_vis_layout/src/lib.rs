@@ -24,6 +24,7 @@ impl Node {
 }
 
 const NODE_SIZE: f32 = 100.0;
+const NODE_SPACING: f32 = NODE_SIZE / 2.0;
 
 fn iterate_graph<'a>(graph: &'a DLVis) ->
                                (HashMap<usize, &'a parser::Node>,
@@ -171,32 +172,36 @@ fn solve_layout(start: usize, end: usize,
             let to = p.0;
             let alignment = p.1;
 
-            let cur_note = layout.get(&id).expect(&format!("Couldn't find node {}", id));
+            let cur_node = layout.get(&id).expect(&format!("Couldn't find node {}", id));
             let align_to = layout.get(&to).expect(&format!("Couldn't find node {}", to));
 
             match alignment {
                 parser::Neighbors::Left => {
                     solver.add_constraints(&[
-                        cur_note.right | LE(REQUIRED) | align_to.left,
-                        cur_note.upper | EQ(REQUIRED) | align_to.upper
+                        cur_node.right | LE(REQUIRED) | align_to.left,
+                        align_to.left - cur_node.right | GE(STRONG) | NODE_SPACING,
+                        cur_node.upper | EQ(WEAK) | align_to.upper
                     ]).unwrap();
                 },
                 parser::Neighbors::Right => {
                     solver.add_constraints(&[
-                        cur_note.left | GE(REQUIRED) | align_to.right,
-                        cur_note.upper | EQ(REQUIRED) | align_to.upper
+                        cur_node.left  | GE(REQUIRED) | align_to.right,
+                        cur_node.left - align_to.right | GE(STRONG) | NODE_SPACING,
+                        cur_node.upper | EQ(WEAK) | align_to.upper
                     ]).unwrap();
                 },
                 parser::Neighbors::Above => {
                     solver.add_constraints(&[
-                        cur_note.lower | LE(REQUIRED) | align_to.upper,
-                        cur_note.left | EQ(REQUIRED) | align_to.left
+                        cur_node.lower | LE(REQUIRED) | align_to.upper,
+                        align_to.upper - cur_node.lower  | GE(STRONG) | NODE_SPACING,
+                        cur_node.left | EQ(WEAK) | align_to.left
                     ]).unwrap();
                 },
                 parser::Neighbors::Below => {
                     solver.add_constraints(&[
-                        cur_note.upper | GE(REQUIRED) | align_to.lower,
-                        cur_note.left | EQ(REQUIRED) | align_to.left
+                        cur_node.upper | GE(REQUIRED) | align_to.lower,
+                        align_to.lower - cur_node.upper  | GE(STRONG) | NODE_SPACING,
+                        cur_node.left | EQ(WEAK) | align_to.left
                     ]).unwrap();
                 }
             };
@@ -218,8 +223,8 @@ fn solve_layout(start: usize, end: usize,
         solver.add_constraints(&[
             node.left |LE(REQUIRED)| node.right,
             node.upper |LE(REQUIRED)| node.lower,
-            node.right - node.left |EQ(WEAK)| final_size,
-            node.lower - node.upper |EQ(WEAK)| final_size,
+            node.right - node.left |EQ(REQUIRED)| final_size,
+            node.lower - node.upper |EQ(REQUIRED)| final_size,
         ]).unwrap();
         let name_left = format!("Node{}.Left", id);
         let name_right = format!("Node{}.Right", id);
@@ -230,11 +235,6 @@ fn solve_layout(start: usize, end: usize,
         names.insert(node.upper, name_upper);
         names.insert(node.lower, name_lower);
     }
-
-    println!("Names: {:?}", names);
-
-
-    println!("Done");
 
     solver.add_edit_variable(window_width, STRONG).unwrap();
     solver.add_edit_variable(window_height, STRONG).unwrap();
