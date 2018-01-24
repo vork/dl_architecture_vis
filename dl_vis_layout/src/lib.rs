@@ -23,8 +23,22 @@ impl Node {
     }
 }
 
+struct Line {
+    x1: Variable,
+    y1: Variable,
+    x2: Variable,
+    y2: Variable
+}
+
+impl Line {
+    pub fn new() -> Self {
+        Line { x1: Variable::new(), y1: Variable::new(), x2: Variable::new(), y2: Variable::new() }
+    }
+}
+
 const NODE_SIZE: f32 = 100.0;
 const NODE_SPACING: f32 = NODE_SIZE / 2.0;
+const LINE_SPACING: f32 = NODE_SPACING / 3.0;
 
 fn iterate_graph<'a>(graph: &'a DLVis) ->
                                (HashMap<usize, &'a parser::Node>,
@@ -168,10 +182,7 @@ fn solve_layout(start: usize, end: usize,
     ]).unwrap();*/
 
     for (id, ps) in position_meta {
-        for p in ps {
-            let to = p.0;
-            let alignment = p.1;
-
+        for &(to, alignment) in ps {
             let cur_node = layout.get(&id).expect(&format!("Couldn't find node {}", id));
             let align_to = layout.get(&to).expect(&format!("Couldn't find node {}", to));
 
@@ -234,6 +245,79 @@ fn solve_layout(start: usize, end: usize,
         names.insert(node.right, name_right);
         names.insert(node.upper, name_upper);
         names.insert(node.lower, name_lower);
+    }
+
+    print_changes(&names, solver.fetch_changes());
+
+    for (id, os) in operation_meta {
+        for &(to, ref operation) in os {
+            let from_node = layout.get(&id).expect(&format!("Couldn't find node {}", id));
+            let to_node = layout.get(&to).expect(&format!("Couldn't find node {}", to));
+
+            match operation {
+                &parser::Op::PassTo => {
+                    let line = Line::new();
+                    names.insert(line.x1, format!("Pass{}To{}.x1", id, to));
+                    names.insert(line.y1, format!("Pass{}To{}.y1", id, to));
+                    names.insert(line.x2, format!("Pass{}To{}.x2", id, to));
+                    names.insert(line.y2, format!("Pass{}To{}.y2", id, to));
+
+                    let is_node_left = if from_node.left < to_node.left { true } else { false };
+                    let is_node_above = if from_node.upper < to_node.upper { true } else { false };
+
+                    // This is ugly! and only works due to line 250
+                    let horizontal_diff = solver.get_value(from_node.left) - solver.get_value(to_node.left);
+                    let vertical_diff = solver.get_value(from_node.upper) - solver.get_value(to_node.upper);
+
+                    let horizontal_line = if horizontal_diff >= vertical_diff { true } else { false };
+
+                    if horizontal_line { // Horizontal line.
+                        let start_point = if is_node_left {
+                            (from_node.right, from_node.upper + (from_node.lower - from_node.upper) / 2.0)
+                        } else {
+                            (to_node.right, to_node.upper + (to_node.lower - to_node.upper) / 2.0)
+                        };
+                        let end_point = if is_node_left {
+                            (to_node.left, to_node.upper + (to_node.lower - to_node.upper) / 2.0)
+                        } else {
+                            (from_node.left, from_node.upper + (from_node.lower - from_node.upper) / 2.0)
+                        };
+                        solver.add_constraints(&[
+                            line.x1 | EQ(REQUIRED) | start_point.0 + LINE_SPACING,
+                            line.y1 | EQ(REQUIRED) | start_point.1,
+                            line.x2 | EQ(REQUIRED) | end_point.0 - LINE_SPACING,
+                            line.y2 | EQ(REQUIRED) | end_point.1,
+                        ]);
+                    } else { //Vertical line
+                        let start_point = if is_node_above {
+                            (from_node.lower, from_node.left + (from_node.right - from_node.left) / 2.0)
+                        } else {
+                            (to_node.lower,  to_node.left + (to_node.right - to_node.left) / 2.0)
+                        };
+                        let end_point = if is_node_above {
+                            (to_node.upper, to_node.left + (to_node.right - to_node.left) / 2.0)
+                        } else {
+                            (from_node.upper, from_node.left + (from_node.right - from_node.left) / 2.0)
+                        };
+                        solver.add_constraints(&[
+                            line.x1 | EQ(REQUIRED) | start_point.1,
+                            line.y1 | EQ(REQUIRED) | start_point.0 + LINE_SPACING,
+                            line.x2 | EQ(REQUIRED) | end_point.1,
+                            line.y2 | EQ(REQUIRED) | end_point.0 - LINE_SPACING,
+                        ]);
+                    }
+
+
+                },
+                //parser::Op::SkipTo => {
+
+                //},
+                _ => { //Ignore other operations for now
+                    continue;
+                },
+            }
+        }
+
     }
 
     solver.add_edit_variable(window_width, STRONG).unwrap();
