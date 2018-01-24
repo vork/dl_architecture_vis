@@ -108,7 +108,7 @@ impl Node {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(PartialEq, Debug, Clone)]
 pub enum Op {
     Convolution{
         dimension: u32,
@@ -325,6 +325,7 @@ end = 3
 [[nodes]]
 	id = 2
 	dimension = [5, 512, 512, 1]
+	above_of = 3
 	[nodes.operation]
 		to = 3
 		[nodes.operation.convolution]
@@ -333,7 +334,6 @@ end = 3
 			num_outputs = 128
 			stride = [1, 2, 2]
 			activation_fn = "relu"
-	above_of = 3
 
 [[nodes]]
 	id = 3
@@ -356,4 +356,7 @@ end = 3
         &Op::Convolution { .. }=> assert!(true),
         _ => assert!(false)
     }
+
+    assert_eq!(decoded.get_node(2).unwrap().neighbors[0], Neighbors::Above);
+    assert_eq!(decoded.get_node(1).unwrap().neighbors[0], Neighbors::Left);
 }
