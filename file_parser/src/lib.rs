@@ -310,4 +310,50 @@ pub fn parse_file(input: String) -> Result<DLVis, String> { //TODO return error 
     }
 }
 
+#[test]
+fn parse_test() {
+    let toml_str = r#"
+start = 1
+end = 3
 
+[[nodes]]
+	id = 1
+	dimension = [5, 512, 512, 1]
+	pass_to = 2
+	left_of = 2
+
+[[nodes]]
+	id = 2
+	dimension = [5, 512, 512, 1]
+	[nodes.operation]
+		to = 3
+		[nodes.operation.convolution]
+			dimension = 3
+			kernel_size = 3
+			num_outputs = 128
+			stride = [1, 2, 2]
+			activation_fn = "relu"
+	above_of = 3
+
+[[nodes]]
+	id = 3
+	dimension = [5, 256, 256, 1]
+    "#;
+
+    let decoded: DLVis = parse_file(toml_str.to_string()).unwrap();
+
+
+    assert_eq!(decoded.start, 1);
+    assert_eq!(decoded.end, 3);
+
+    let node2 = decoded.get_node(2).unwrap();
+
+    assert!(node2.operations.is_some());
+
+    let operations = decoded.get_operation_to(node2).unwrap();
+    assert_eq!(operations[0].0.unwrap().id, 3);
+    match operations[0].1 {
+        &Op::Convolution { .. }=> assert!(true),
+        _ => assert!(false)
+    }
+}
