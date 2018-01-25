@@ -38,6 +38,7 @@ impl Line {
 
 const NODE_SIZE: f32 = 100.0;
 const NODE_SPACING: f32 = NODE_SIZE / 2.0;
+const NODE_OVERLAY: f32 = 0.1;
 const LINE_SPACING: f32 = NODE_SPACING / 3.0;
 
 fn iterate_graph<'a>(graph: &'a DLVis) ->
@@ -227,8 +228,7 @@ fn solve_layout(start: usize, end: usize,
         let mut final_size = NODE_SIZE;
         if dims.len() > 3 {
             let depth = dims[0];
-            let overlap = 0.1;
-            final_size += NODE_SIZE * depth as f32 * overlap ;
+            final_size += NODE_SIZE * depth as f32 * NODE_OVERLAY ;
         }
 
         solver.add_constraints(&[
@@ -275,12 +275,12 @@ fn solve_layout(start: usize, end: usize,
                         let start_point = if is_node_left {
                             (from_node.right, from_node.upper + (from_node.lower - from_node.upper) / 2.0)
                         } else {
-                            (to_node.right, to_node.upper + (to_node.lower - to_node.upper) / 2.0)
+                            (from_node.left, from_node.upper + (from_node.lower - from_node.upper) / 2.0)
                         };
                         let end_point = if is_node_left {
                             (to_node.left, to_node.upper + (to_node.lower - to_node.upper) / 2.0)
                         } else {
-                            (from_node.left, from_node.upper + (from_node.lower - from_node.upper) / 2.0)
+                            (to_node.right, to_node.upper + (to_node.lower - to_node.upper) / 2.0)
                         };
                         solver.add_constraints(&[
                             line.x1 | EQ(REQUIRED) | start_point.0 + LINE_SPACING,
@@ -292,12 +292,12 @@ fn solve_layout(start: usize, end: usize,
                         let start_point = if is_node_above {
                             (from_node.lower, from_node.left + (from_node.right - from_node.left) / 2.0)
                         } else {
-                            (to_node.lower,  to_node.left + (to_node.right - to_node.left) / 2.0)
+                            (from_node.upper,  from_node.left + (from_node.right - from_node.left) / 2.0)
                         };
                         let end_point = if is_node_above {
                             (to_node.upper, to_node.left + (to_node.right - to_node.left) / 2.0)
                         } else {
-                            (from_node.upper, from_node.left + (from_node.right - from_node.left) / 2.0)
+                            (to_node.lower, to_node.left + (to_node.right - to_node.left) / 2.0)
                         };
                         solver.add_constraints(&[
                             line.x1 | EQ(REQUIRED) | start_point.1,
@@ -309,9 +309,56 @@ fn solve_layout(start: usize, end: usize,
 
 
                 },
-                //parser::Op::SkipTo => {
+                &parser::Op::SkipTo => {
+                    let line = Line::new();
+                    names.insert(line.x1, format!("Skip{}To{}.x1", id, to));
+                    names.insert(line.y1, format!("Skip{}To{}.y1", id, to));
+                    names.insert(line.x2, format!("Skip{}To{}.x2", id, to));
+                    names.insert(line.y2, format!("Skip{}To{}.y2", id, to));
 
-                //},
+                    let is_node_left = if from_node.left < to_node.left { true } else { false };
+
+                    let start_point = if is_node_left {
+                        (from_node.right, from_node.upper + (from_node.lower - from_node.upper) / 2.0)
+                    } else {
+                        (from_node.left, from_node.upper + (from_node.lower - from_node.upper) / 2.0)
+                    };
+                    let end_point = if is_node_left {
+                        (to_node.left, to_node.upper + (to_node.lower - to_node.upper) / 2.0)
+                    } else {
+                        (to_node.right, to_node.upper + (to_node.lower - to_node.upper) / 2.0)
+                    };
+                    solver.add_constraints(&[
+                        line.x1 | EQ(REQUIRED) | start_point.0 + (LINE_SPACING*2.0),
+                        line.y1 | EQ(REQUIRED) | start_point.1,
+                        line.x2 | EQ(REQUIRED) | end_point.0 - LINE_SPACING,
+                        line.y2 | EQ(REQUIRED) | end_point.1,
+                    ]);
+
+
+                    let first_dim = nodes.get(&id).unwrap().dimension[0];
+
+                    for i in 0..first_dim {
+                        let connect_line = Line::new();
+                        names.insert(connect_line.x1, format!("Connect{}.{}.x1", id, i));
+                        names.insert(connect_line.y1, format!("Connect{}.{}.y1", id, i));
+                        names.insert(connect_line.x2, format!("Connect{}.{}.x2", id, i));
+                        names.insert(connect_line.y2, format!("Connect{}.{}.y2", id, i));
+
+                        let node_point = if is_node_left {
+                            (from_node.right, from_node.lower - (NODE_SIZE / 2.0) - (i as f32 * NODE_SIZE * NODE_OVERLAY))
+                        } else {
+                            (from_node.left, from_node.lower - (NODE_SIZE / 2.0) - (i as f32 * NODE_SIZE * NODE_OVERLAY))
+                        };
+
+                        solver.add_constraints(&[
+                            connect_line.x1 | EQ(REQUIRED) | node_point.0 + LINE_SPACING,
+                            connect_line.y1 | EQ(REQUIRED) | node_point.1,
+                            connect_line.x2 | EQ(REQUIRED) | line.x1,
+                            connect_line.y2 | EQ(REQUIRED) | line.y1,
+                        ]);
+                    }
+                }
                 _ => { //Ignore other operations for now
                     continue;
                 },

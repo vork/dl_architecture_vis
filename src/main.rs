@@ -7,7 +7,7 @@ fn main() {
 start = 1
 start_align_left = true
 start_align_up = true
-end = 3
+end = 4
 
 [[nodes]]
 	id = 1
@@ -32,6 +32,12 @@ end = 3
 
 [[nodes]]
 	id = 3
+	dimension = [5, 256, 256, 1]
+	left_of = 4
+    skip_connection_to = 4
+
+[[nodes]]
+	id = 4
 	dimension = [5, 256, 256, 1]
     "#;
 
