@@ -1,4 +1,7 @@
-extern crate dl_vis_layout as layout;
+extern crate dl_vis_render as render;
+
+use std::fs::File;
+use std::io::prelude::*;
 
 fn main() {
     println!("Hello, world!");
@@ -41,5 +44,6 @@ end = 4
 	dimension = [5, 256, 256, 1]
     "#;
 
-    layout::render_file(toml_str.to_string());
+    let mut file = File::create("image.svg").unwrap();
+    file.write_all(&(render::render_file(toml_str.to_string()).unwrap()).as_bytes());
 }

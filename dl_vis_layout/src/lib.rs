@@ -10,29 +10,65 @@ use cassowary::strength::{ WEAK, MEDIUM, STRONG, REQUIRED };
 
 use parser::DLVis;
 
-struct Node {
+pub struct Square {
+    pub left: f32,
+    pub right: f32,
+    pub upper: f32,
+    pub lower: f32
+}
+
+impl Square {
+    fn from_variable(node: &NodeVariable, solver: &Solver) -> Self {
+        Square {
+            left: solver.get_value(node.left) as f32,
+            right: solver.get_value(node.right) as f32,
+            upper: solver.get_value(node.upper) as f32,
+            lower: solver.get_value(node.lower) as f32,
+        }
+    }
+}
+
+pub struct Line {
+    pub x1: f32,
+    pub y1: f32,
+    pub x2: f32,
+    pub y2: f32
+}
+
+impl Line {
+    fn from_variable(line: &LineVariable, solver: &Solver) -> Self {
+        Line {
+            x1: solver.get_value(line.x1) as f32,
+            y1: solver.get_value(line.y1) as f32,
+            x2: solver.get_value(line.x2) as f32,
+            y2: solver.get_value(line.y2) as f32,
+        }
+    }
+}
+
+pub struct NodeVariable { //TODO evaluate the variables in this crate
     left: Variable,
     right: Variable,
     upper: Variable,
     lower: Variable
 }
 
-impl Node {
+impl NodeVariable {
     pub fn new() -> Self {
-        Node { left: Variable::new(), right: Variable::new(), upper: Variable::new(), lower: Variable::new() }
+        NodeVariable { left: Variable::new(), right: Variable::new(), upper: Variable::new(), lower: Variable::new() }
     }
 }
 
-struct Line {
+struct LineVariable { //TODO evaluate the variables in this crate
     x1: Variable,
     y1: Variable,
     x2: Variable,
     y2: Variable
 }
 
-impl Line {
+impl LineVariable {
     pub fn new() -> Self {
-        Line { x1: Variable::new(), y1: Variable::new(), x2: Variable::new(), y2: Variable::new() }
+        LineVariable { x1: Variable::new(), y1: Variable::new(), x2: Variable::new(), y2: Variable::new() }
     }
 }
 
@@ -43,7 +79,7 @@ const LINE_SPACING: f32 = NODE_SPACING / 3.0;
 
 fn iterate_graph<'a>(graph: &'a DLVis) ->
                                (HashMap<usize, &'a parser::Node>,
-                                HashMap<usize, Node>,
+                                HashMap<usize, NodeVariable>,
                                 HashMap<usize, Vec<(usize, parser::Neighbors)>>,
                                 HashMap<usize, Vec<(usize, parser::Op)>>) {
     // Open nodes
@@ -61,7 +97,7 @@ fn iterate_graph<'a>(graph: &'a DLVis) ->
 
     //Store all nodes for the cassowary algorithm
     let mut layout = HashMap::new();
-    layout.insert(start.id, Node::new());
+    layout.insert(start.id, NodeVariable::new());
 
     let mut nodes = HashMap::new();
     nodes.insert(start.id, start);
@@ -87,7 +123,7 @@ fn iterate_graph<'a>(graph: &'a DLVis) ->
 
                 //Create new node for child
                 if !layout.contains_key(&child.id) {
-                    layout.insert(child.id, Node::new());
+                    layout.insert(child.id, NodeVariable::new());
                 }
 
                 if !nodes.contains_key(&child.id) {
@@ -115,7 +151,7 @@ fn iterate_graph<'a>(graph: &'a DLVis) ->
 
                     if node.is_some() {
                         if !layout.contains_key(&id) {
-                            layout.insert(id, Node::new());
+                            layout.insert(id, NodeVariable::new());
                         }
                         if !nodes.contains_key(&id) {
                             nodes.insert(id, node.unwrap());
@@ -148,9 +184,12 @@ fn solve_layout(start: usize, end: usize,
                 start_align_up: bool,
                 start_align_down: bool,
                 nodes: &HashMap<usize, &parser::Node>,
-                layout: &HashMap<usize, Node>,
+                layout: &HashMap<usize, NodeVariable>,
                 position_meta: &HashMap<usize, Vec<(usize, parser::Neighbors)>>,
-                operation_meta: &HashMap<usize, Vec<(usize, parser::Op)>>) -> HashMap<usize, Node> {
+                operation_meta: &HashMap<usize, Vec<(usize, parser::Op)>>) -> ((f32, f32), Vec<Square>, Vec<Line>) {
+    let mut square_var = Vec::new();
+    let mut line_var = Vec::new();
+
     let mut names = HashMap::new();
 
     let window_width = Variable::new();
@@ -176,11 +215,6 @@ fn solve_layout(start: usize, end: usize,
     if start_align_down {
         solver.add_constraint(layout.get(&start).expect("Start node wasn't found!").lower |EQ(REQUIRED)| window_height).unwrap();
     }
-    /*solver.add_constraints(&[layout.get(&start).expect("Start node wasn't found!").left |EQ(REQUIRED)| 0.0, //Left align
-        layout.get(&start).expect("Start node wasn't found!").upper |EQ(REQUIRED)| 0.0, //Up align
-        layout.get(&end).expect("Start node wasn't found!").right |EQ(REQUIRED)| window_width, //Right align
-        layout.get(&end).expect("Start node wasn't found!").upper |EQ(REQUIRED)| 0.0 //Up align
-    ]).unwrap();*/
 
     for (id, ps) in position_meta {
         for &(to, alignment) in ps {
@@ -221,6 +255,8 @@ fn solve_layout(start: usize, end: usize,
     }
 
     for (id, node) in layout {
+        square_var.push(node);
+
         let node_data = nodes.get(id).unwrap();
 
         let dims = &node_data.dimension;
@@ -256,11 +292,12 @@ fn solve_layout(start: usize, end: usize,
 
             match operation {
                 &parser::Op::PassTo => {
-                    let line = Line::new();
+                    let line = LineVariable::new();
                     names.insert(line.x1, format!("Pass{}To{}.x1", id, to));
                     names.insert(line.y1, format!("Pass{}To{}.y1", id, to));
                     names.insert(line.x2, format!("Pass{}To{}.x2", id, to));
                     names.insert(line.y2, format!("Pass{}To{}.y2", id, to));
+                    line_var.push(line);
 
                     let is_node_left = if from_node.left < to_node.left { true } else { false };
                     let is_node_above = if from_node.upper < to_node.upper { true } else { false };
@@ -283,10 +320,10 @@ fn solve_layout(start: usize, end: usize,
                             (to_node.right, to_node.upper + (to_node.lower - to_node.upper) / 2.0)
                         };
                         solver.add_constraints(&[
-                            line.x1 | EQ(REQUIRED) | start_point.0 + LINE_SPACING,
-                            line.y1 | EQ(REQUIRED) | start_point.1,
-                            line.x2 | EQ(REQUIRED) | end_point.0 - LINE_SPACING,
-                            line.y2 | EQ(REQUIRED) | end_point.1,
+                            line_var.last().unwrap().x1 | EQ(REQUIRED) | start_point.0 + LINE_SPACING,
+                            line_var.last().unwrap().y1 | EQ(REQUIRED) | start_point.1,
+                            line_var.last().unwrap().x2 | EQ(REQUIRED) | end_point.0 - LINE_SPACING,
+                            line_var.last().unwrap().y2 | EQ(REQUIRED) | end_point.1,
                         ]);
                     } else { //Vertical line
                         let start_point = if is_node_above {
@@ -300,21 +337,22 @@ fn solve_layout(start: usize, end: usize,
                             (to_node.lower, to_node.left + (to_node.right - to_node.left) / 2.0)
                         };
                         solver.add_constraints(&[
-                            line.x1 | EQ(REQUIRED) | start_point.1,
-                            line.y1 | EQ(REQUIRED) | start_point.0 + LINE_SPACING,
-                            line.x2 | EQ(REQUIRED) | end_point.1,
-                            line.y2 | EQ(REQUIRED) | end_point.0 - LINE_SPACING,
+                            line_var.last().unwrap().x1 | EQ(REQUIRED) | start_point.1,
+                            line_var.last().unwrap().y1 | EQ(REQUIRED) | start_point.0 + LINE_SPACING,
+                            line_var.last().unwrap().x2 | EQ(REQUIRED) | end_point.1,
+                            line_var.last().unwrap().y2 | EQ(REQUIRED) | end_point.0 - LINE_SPACING,
                         ]);
                     }
 
 
                 },
                 &parser::Op::SkipTo => {
-                    let line = Line::new();
+                    let line = LineVariable::new();
                     names.insert(line.x1, format!("Skip{}To{}.x1", id, to));
                     names.insert(line.y1, format!("Skip{}To{}.y1", id, to));
                     names.insert(line.x2, format!("Skip{}To{}.x2", id, to));
                     names.insert(line.y2, format!("Skip{}To{}.y2", id, to));
+                    line_var.push(line);
 
                     let is_node_left = if from_node.left < to_node.left { true } else { false };
 
@@ -329,21 +367,23 @@ fn solve_layout(start: usize, end: usize,
                         (to_node.right, to_node.upper + (to_node.lower - to_node.upper) / 2.0)
                     };
                     solver.add_constraints(&[
-                        line.x1 | EQ(REQUIRED) | start_point.0 + (LINE_SPACING*2.0),
-                        line.y1 | EQ(REQUIRED) | start_point.1,
-                        line.x2 | EQ(REQUIRED) | end_point.0 - LINE_SPACING,
-                        line.y2 | EQ(REQUIRED) | end_point.1,
+                        line_var.last().unwrap().x1 | EQ(REQUIRED) | start_point.0 + (LINE_SPACING*2.0),
+                        line_var.last().unwrap().y1 | EQ(REQUIRED) | start_point.1,
+                        line_var.last().unwrap().x2 | EQ(REQUIRED) | end_point.0 - LINE_SPACING,
+                        line_var.last().unwrap().y2 | EQ(REQUIRED) | end_point.1,
                     ]);
 
 
                     let first_dim = nodes.get(&id).unwrap().dimension[0];
 
+                    let line_index = line_var.len() - 1;
                     for i in 0..first_dim {
-                        let connect_line = Line::new();
+                        let connect_line = LineVariable::new();
                         names.insert(connect_line.x1, format!("Connect{}.{}.x1", id, i));
                         names.insert(connect_line.y1, format!("Connect{}.{}.y1", id, i));
                         names.insert(connect_line.x2, format!("Connect{}.{}.x2", id, i));
                         names.insert(connect_line.y2, format!("Connect{}.{}.y2", id, i));
+                        line_var.push(connect_line);
 
                         let node_point = if is_node_left {
                             (from_node.right, from_node.lower - (NODE_SIZE / 2.0) - (i as f32 * NODE_SIZE * NODE_OVERLAY))
@@ -352,10 +392,10 @@ fn solve_layout(start: usize, end: usize,
                         };
 
                         solver.add_constraints(&[
-                            connect_line.x1 | EQ(REQUIRED) | node_point.0 + LINE_SPACING,
-                            connect_line.y1 | EQ(REQUIRED) | node_point.1,
-                            connect_line.x2 | EQ(REQUIRED) | line.x1,
-                            connect_line.y2 | EQ(REQUIRED) | line.y1,
+                            line_var.last().unwrap().x1 | EQ(REQUIRED) | node_point.0 + LINE_SPACING,
+                            line_var.last().unwrap().y1 | EQ(REQUIRED) | node_point.1,
+                            line_var.last().unwrap().x2 | EQ(REQUIRED) | line_var[line_index].x1,
+                            line_var.last().unwrap().y2 | EQ(REQUIRED) | line_var[line_index].y1,
                         ]);
                     }
                 }
@@ -375,22 +415,24 @@ fn solve_layout(start: usize, end: usize,
 
     print_changes(&names, solver.fetch_changes());
 
-    return HashMap::new()
+    let square_ret = square_var.iter().map(|x| Square::from_variable(x, &solver)).collect();
+    let line_ret = line_var.iter().map(|x| Line::from_variable(x, &solver)).collect();
+
+    return ((solver.get_value(window_width) as f32, solver.get_value(window_height) as f32), square_ret, line_ret);
 }
 
-pub fn render_file(toml: String) {
+pub fn layout_file(toml: String) -> Result<((f32, f32), Vec<Square>, Vec<Line>), String> {
     match parser::parse_file(toml) {
         Ok(dlvis) => {
             let (nodes, layout, position_meta, operation_meta) = iterate_graph(&dlvis);
-            solve_layout(dlvis.start, dlvis.end,
+            return Ok(solve_layout(dlvis.start, dlvis.end,
                          dlvis.start_align_left,
                          dlvis.start_align_right,
                          dlvis.start_align_up,
                          dlvis.start_align_down,
-                         &nodes, &layout, &position_meta, &operation_meta);
-
+                         &nodes, &layout, &position_meta, &operation_meta));
         },
-        Err(err) => panic!(err),
+        Err(err) => Err(err),
     }
 }
 

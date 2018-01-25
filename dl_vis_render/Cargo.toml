@@ -1,0 +1,15 @@
+[package]
+
+name = "dl_vis_render"
+version = "0.0.1"
+description = "Renderer for DLVis."
+authors = ["Mark Benedikt Boss <markboss@mailbox.org>"]
+license = "MIT/Apache-2.0"
+
+[lib]
+name = "dl_vis_render"
+path = "src/lib.rs"
+
+[dependencies]
+simplesvg = "0.4.0"
+dl_vis_layout = { version = "0.0.1", path = "../dl_vis_layout/" }
