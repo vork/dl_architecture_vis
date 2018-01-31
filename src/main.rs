@@ -16,27 +16,20 @@ end = 4
 	id = 1
 	dimension = [5, 512, 512, 1]
 	pass_to = 2
-	left_of = 2
 	above_of = 2
 
 [[nodes]]
 	id = 2
 	dimension = [5, 512, 512, 1]
-	below_of = 3
-	right_of = 3
-	[nodes.operation]
-		to = 3
-		[nodes.operation.convolution]
-			dimension = 3
-			kernel_size = 3
-			num_outputs = 128
-			stride = [1, 2, 2]
-			activation_fn = "relu"
+	left_of = 3
+	above_of = 3
+	pass_to = 3
 
 [[nodes]]
 	id = 3
 	dimension = [5, 256, 256, 1]
 	left_of = 4
+	below_of = 4
     skip_connection_to = 4
 
 [[nodes]]
@@ -44,6 +37,8 @@ end = 4
 	dimension = [5, 256, 256, 1]
     "#;
 
-    let mut file = File::create("image.svg").unwrap();
-    file.write_all(&(render::render_file(toml_str.to_string()).unwrap()).as_bytes());
+    println!("{}", render::render_file(toml_str.to_string()).unwrap());
+
+    //let mut file = File::create("image.svg").unwrap();
+    //file.write_all(&(render::render_file(toml_str.to_string()).unwrap()).as_bytes());
 }

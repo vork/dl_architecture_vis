@@ -10,6 +10,7 @@ use cassowary::strength::{ WEAK, MEDIUM, STRONG, REQUIRED };
 
 use parser::DLVis;
 
+#[derive(Debug)]
 pub struct Square {
     pub left: f32,
     pub right: f32,
@@ -26,8 +27,15 @@ impl Square {
             lower: solver.get_value(node.lower) as f32,
         }
     }
+
+    fn new(left: f32, up: f32, right: f32, down: f32) -> Self {
+        Square {
+            left, right, upper: up, lower: down
+        }
+    }
 }
 
+#[derive(Debug)]
 pub struct Line {
     pub x1: f32,
     pub y1: f32,
@@ -46,6 +54,7 @@ impl Line {
     }
 }
 
+#[derive(Debug)]
 pub struct NodeVariable { //TODO evaluate the variables in this crate
     left: Variable,
     right: Variable,
@@ -72,7 +81,7 @@ impl LineVariable {
     }
 }
 
-const NODE_SIZE: f32 = 100.0;
+const NODE_SIZE: f32 = 1.0;
 const NODE_SPACING: f32 = NODE_SIZE / 2.0;
 const NODE_OVERLAY: f32 = 0.1;
 const LINE_SPACING: f32 = NODE_SPACING / 3.0;
@@ -210,15 +219,15 @@ fn solve_layout(start: usize, end: usize,
         solver.add_constraint(layout.get(&start).expect("Start node wasn't found!").right |EQ(REQUIRED)| window_width).unwrap();
     }
     if start_align_up {
-        solver.add_constraint(layout.get(&start).expect("Start node wasn't found!").upper |EQ(REQUIRED)| 0.0).unwrap();
+        solver.add_constraint(layout.get(&start).expect("Start node wasn't found!").upper |EQ(REQUIRED)| window_height).unwrap();
     }
     if start_align_down {
-        solver.add_constraint(layout.get(&start).expect("Start node wasn't found!").lower |EQ(REQUIRED)| window_height).unwrap();
+        solver.add_constraint(layout.get(&start).expect("Start node wasn't found!").lower |EQ(REQUIRED)| 0.0).unwrap();
     }
 
     for (id, ps) in position_meta {
+        let cur_node = layout.get(&id).expect(&format!("Couldn't find node {}", id));
         for &(to, alignment) in ps {
-            let cur_node = layout.get(&id).expect(&format!("Couldn't find node {}", id));
             let align_to = layout.get(&to).expect(&format!("Couldn't find node {}", to));
 
             match alignment {
@@ -231,21 +240,21 @@ fn solve_layout(start: usize, end: usize,
                 },
                 parser::Neighbors::Right => {
                     solver.add_constraints(&[
-                        cur_node.left  | GE(REQUIRED) | align_to.right,
+                        align_to.right  | LE(REQUIRED) | cur_node.left,
                         cur_node.left - align_to.right | GE(STRONG) | NODE_SPACING,
                         cur_node.upper | EQ(WEAK) | align_to.upper
                     ]).unwrap();
                 },
                 parser::Neighbors::Above => {
                     solver.add_constraints(&[
-                        cur_node.lower | LE(REQUIRED) | align_to.upper,
-                        align_to.upper - cur_node.lower  | GE(STRONG) | NODE_SPACING,
+                        cur_node.lower | GE(REQUIRED) | align_to.upper,
+                        cur_node.lower - align_to.upper  | GE(STRONG) | NODE_SPACING,
                         cur_node.left | EQ(WEAK) | align_to.left
                     ]).unwrap();
                 },
                 parser::Neighbors::Below => {
                     solver.add_constraints(&[
-                        cur_node.upper | GE(REQUIRED) | align_to.lower,
+                        cur_node.upper | LE(REQUIRED) | align_to.lower,
                         align_to.lower - cur_node.upper  | GE(STRONG) | NODE_SPACING,
                         cur_node.left | EQ(WEAK) | align_to.left
                     ]).unwrap();
@@ -255,7 +264,7 @@ fn solve_layout(start: usize, end: usize,
     }
 
     for (id, node) in layout {
-        square_var.push(node);
+        square_var.push((id, node));
 
         let node_data = nodes.get(id).unwrap();
 
@@ -269,9 +278,9 @@ fn solve_layout(start: usize, end: usize,
 
         solver.add_constraints(&[
             node.left |LE(REQUIRED)| node.right,
-            node.upper |LE(REQUIRED)| node.lower,
+            node.upper |GE(REQUIRED)| node.lower,
             node.right - node.left |EQ(REQUIRED)| final_size,
-            node.lower - node.upper |EQ(REQUIRED)| final_size,
+            node.upper - node.lower |EQ(REQUIRED)| final_size,
         ]).unwrap();
         let name_left = format!("Node{}.Left", id);
         let name_right = format!("Node{}.Right", id);
@@ -286,8 +295,8 @@ fn solve_layout(start: usize, end: usize,
     print_changes(&names, solver.fetch_changes());
 
     for (id, os) in operation_meta {
+        let from_node = layout.get(&id).expect(&format!("Couldn't find node {}", id));
         for &(to, ref operation) in os {
-            let from_node = layout.get(&id).expect(&format!("Couldn't find node {}", id));
             let to_node = layout.get(&to).expect(&format!("Couldn't find node {}", to));
 
             match operation {
@@ -310,14 +319,14 @@ fn solve_layout(start: usize, end: usize,
 
                     if horizontal_line { // Horizontal line.
                         let start_point = if is_node_left {
-                            (from_node.right, from_node.upper + (from_node.lower - from_node.upper) / 2.0)
+                            (from_node.right, from_node.upper - (from_node.upper - from_node.lower) / 2.0)
                         } else {
-                            (from_node.left, from_node.upper + (from_node.lower - from_node.upper) / 2.0)
+                            (from_node.left, from_node.upper - (from_node.upper - from_node.lower) / 2.0)
                         };
                         let end_point = if is_node_left {
-                            (to_node.left, to_node.upper + (to_node.lower - to_node.upper) / 2.0)
+                            (to_node.left, to_node.upper - (to_node.upper - to_node.lower) / 2.0)
                         } else {
-                            (to_node.right, to_node.upper + (to_node.lower - to_node.upper) / 2.0)
+                            (to_node.right, to_node.upper - (to_node.upper - to_node.lower) / 2.0)
                         };
                         solver.add_constraints(&[
                             line_var.last().unwrap().x1 | EQ(REQUIRED) | start_point.0 + LINE_SPACING,
@@ -338,9 +347,9 @@ fn solve_layout(start: usize, end: usize,
                         };
                         solver.add_constraints(&[
                             line_var.last().unwrap().x1 | EQ(REQUIRED) | start_point.1,
-                            line_var.last().unwrap().y1 | EQ(REQUIRED) | start_point.0 + LINE_SPACING,
+                            line_var.last().unwrap().y1 | EQ(REQUIRED) | start_point.0 - LINE_SPACING,
                             line_var.last().unwrap().x2 | EQ(REQUIRED) | end_point.1,
-                            line_var.last().unwrap().y2 | EQ(REQUIRED) | end_point.0 - LINE_SPACING,
+                            line_var.last().unwrap().y2 | EQ(REQUIRED) | end_point.0 + LINE_SPACING,
                         ]);
                     }
 
@@ -357,14 +366,14 @@ fn solve_layout(start: usize, end: usize,
                     let is_node_left = if from_node.left < to_node.left { true } else { false };
 
                     let start_point = if is_node_left {
-                        (from_node.right, from_node.upper + (from_node.lower - from_node.upper) / 2.0)
+                        (from_node.right, from_node.upper - (from_node.upper - from_node.lower) / 2.0)
                     } else {
-                        (from_node.left, from_node.upper + (from_node.lower - from_node.upper) / 2.0)
+                        (from_node.left, from_node.upper -  (from_node.upper - from_node.lower) / 2.0)
                     };
                     let end_point = if is_node_left {
-                        (to_node.left, to_node.upper + (to_node.lower - to_node.upper) / 2.0)
+                        (to_node.left, to_node.upper - (to_node.upper - to_node.lower) / 2.0)
                     } else {
-                        (to_node.right, to_node.upper + (to_node.lower - to_node.upper) / 2.0)
+                        (to_node.right, to_node.upper - (to_node.upper - to_node.lower) / 2.0)
                     };
                     solver.add_constraints(&[
                         line_var.last().unwrap().x1 | EQ(REQUIRED) | start_point.0 + (LINE_SPACING*2.0),
@@ -386,9 +395,9 @@ fn solve_layout(start: usize, end: usize,
                         line_var.push(connect_line);
 
                         let node_point = if is_node_left {
-                            (from_node.right, from_node.lower - (NODE_SIZE / 2.0) - (i as f32 * NODE_SIZE * NODE_OVERLAY))
+                            (from_node.right, from_node.lower + (NODE_SIZE / 2.0) + (i as f32 * NODE_SIZE * NODE_OVERLAY))
                         } else {
-                            (from_node.left, from_node.lower - (NODE_SIZE / 2.0) - (i as f32 * NODE_SIZE * NODE_OVERLAY))
+                            (from_node.left, from_node.lower + (NODE_SIZE / 2.0) + (i as f32 * NODE_SIZE * NODE_OVERLAY))
                         };
 
                         solver.add_constraints(&[
@@ -410,12 +419,33 @@ fn solve_layout(start: usize, end: usize,
     solver.add_edit_variable(window_width, STRONG).unwrap();
     solver.add_edit_variable(window_height, STRONG).unwrap();
 
-    solver.suggest_value(window_width, 1280.0).unwrap();
-    solver.suggest_value(window_height, 600.0).unwrap();
+    solver.suggest_value(window_width, 10.0).unwrap();
+    solver.suggest_value(window_height, 10.0).unwrap();
 
     print_changes(&names, solver.fetch_changes());
 
-    let square_ret = square_var.iter().map(|x| Square::from_variable(x, &solver)).collect();
+    let mut square_ret = Vec::new();
+
+    for (id, square) in square_var {
+        let sq = Square::from_variable(square, &solver);
+
+        let node_data = nodes.get(id).unwrap();
+        let dims = &node_data.dimension;
+
+        let mut depth = 1;
+        if dims.len() > 3 {
+            depth = dims[0];
+        }
+
+        for i in 0..depth {
+            let idx = depth - i;
+            let spacing = NODE_OVERLAY * idx as f32;
+            square_ret.push(Square::new(sq.left + spacing, sq.lower + spacing + NODE_SIZE,
+                                        sq.left + spacing + NODE_SIZE, sq.lower + spacing));
+        }
+
+    }
+
     let line_ret = line_var.iter().map(|x| Line::from_variable(x, &solver)).collect();
 
     return ((solver.get_value(window_width) as f32, solver.get_value(window_height) as f32), square_ret, line_ret);

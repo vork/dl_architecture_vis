@@ -11,5 +11,4 @@ name = "dl_vis_render"
 path = "src/lib.rs"
 
 [dependencies]
-simplesvg = "0.4.0"
 dl_vis_layout = { version = "0.0.1", path = "../dl_vis_layout/" }

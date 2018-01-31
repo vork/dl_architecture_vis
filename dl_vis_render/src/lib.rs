@@ -1,24 +1,20 @@
-extern crate simplesvg;
 extern crate dl_vis_layout;
 
-use simplesvg::{Attr, Color, Fig, Svg};
-
 pub fn render_file(toml: String) -> Result<String, String> {
+    let new_line = "\n";
     match dl_vis_layout::layout_file(toml) {
         Ok((size, squares, lines)) => {
-            let mut to_draw = Vec::new();
+            let mut to_draw = String::new();
             for square in squares {
-                let fig = Fig::Rect(square.left, square.upper, square.right - square.left, square.lower - square.upper)
-                    .styled(Attr::default().fill(Color(0xff, 0, 0)));
-                to_draw.push(fig);
+                let fig = format!("\\filldraw[fill=white, draw=black] ({0},{1}) rectangle ({2},{3});", square.left, square.upper, square.right, square.lower);
+                to_draw = to_draw + &fig + new_line;
             }
             for line in lines {
-                let fig = Fig::Line(line.x1, line.y1, line.x2, line.y2)
-                    .styled(Attr::default().stroke(Color(0, 0, 0)).stroke_width(1.));
-                to_draw.push(fig);
+                let fig = format!("\\draw ({0},{1}) -- ({2},{3});", line.x1, line.y1, line.x2, line.y2);
+                to_draw = to_draw + &fig + new_line;
             }
 
-            Ok(Svg(to_draw, size.0 as u32, size.1 as u32).to_string())
+            Ok(to_draw)
         },
         Err(err) => Err(err)
     }
